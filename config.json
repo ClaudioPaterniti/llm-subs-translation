@@ -1,13 +1,14 @@
 {
-    "model": "gemini-2.5-flash-lite",
+    "api": "groq",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
     "original_language": "english",
     "translate_to": "italian",
-    "requests_per_minutes": 15,
+    "requests_per_minutes": 30,
     "translator_type": "text",
-    "lines_per_chunk": 500,
+    "lines_per_chunk": 200,
     "chunks_per_request": 10,
-    "token_per_minutes": 1000000,
-    "content_config": {
+    "token_per_minutes": 30000,
+    "llm_config": {
         "temperature": 0.0
     },
     "max_retries": 2,

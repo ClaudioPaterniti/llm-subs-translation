@@ -1,7 +1,9 @@
-from typing import Optional, Any, Protocol, Callable, Awaitable
+from typing import Optional, Any, Protocol, TypeVar
 from dataclasses import dataclass
 
 from pydantic import BaseModel
+
+Structure = TypeVar('Structure', bound=BaseModel)
 
 class AssIgnore(BaseModel):
     field: str
@@ -12,6 +14,7 @@ class AssSettings(BaseModel):
     ignore: Optional[list[AssIgnore]] = None
 
 class Config(BaseModel):
+    api: str
     original_language: str
     translate_to: str
     outfile_suffix: str
@@ -22,7 +25,7 @@ class Config(BaseModel):
     requests_per_minutes: int = 15
     token_per_minutes: int = 1000000
     max_concurrent_requests: Optional[int] = None
-    content_config: dict[str, Any] = {}
+    llm_config: dict[str, Any] = {}
     max_retries: int = 2
     ass_settings: AssSettings
     debug: bool = False

@@ -1,5 +1,4 @@
 import os
-import asyncio
 
 from src.models import *
 from src.srt_parser import SrtTranslationFile

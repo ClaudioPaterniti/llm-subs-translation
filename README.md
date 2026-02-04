@@ -1,10 +1,10 @@
 # Translate .ass or .srt subs
 
-Simple python script to translate .ass or .srt files with gemini api.
+Simple python script to translate .ass or .srt files with an llm api.
 
 ## Setup
 
-The program required python to be installed and expects a gemini key in the file gemini.key.
+The program required python and an api key.
 
 The setup_env.ps1 script can be used to setup the python .venv with the required dependencies, it does nothing more than:
 
@@ -15,7 +15,11 @@ The setup_env.ps1 script can be used to setup the python .venv with the required
 ```
 
 Setup an appropriate prompt.txt to guide the translation.
-Gemini and other settings can be configured in config.json
+Llm and other settings can be configured in config.json
+
+Current accepted apis:
+- gemini: set field "api" in config.json to "gemini" and populate a file gemini.key or env var GEMINI_KEY with a gemini api key
+- groq: set field "api" in config.json to "groq" and populate a file groq.key or env var GROQ_KEY with a groq api key
 
 ## How to
 

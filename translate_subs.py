@@ -7,7 +7,6 @@ import traceback
 from string import Template
 
 from src.models import *
-from src.gemini import GeminiClient
 from src.rate_limiter import RateLimitedLLM
 from src.translate_file import TranslateFileTask
 
@@ -51,14 +50,6 @@ async def main(llm: RateLimitedLLM, file_paths: list[str], config: Config):
 
 if __name__ == '__main__':
     script_path = os.path.abspath(os.path.split(__file__)[0])
-    key = os.environ.get('GEMINI_KEY')
-    if key is None and os.path.exists(os.path.join(script_path, 'gemini.key')):
-            with open(os.path.join(script_path, 'gemini.key'), 'r') as key_fp:
-                key = key_fp.read()
-
-    if not key:
-        logger.error("Could not retrieve gemini key, populate env variable GEMINI_KEY or file gemini.key")
-        sys.exit()
 
     with (
             open(os.path.join(script_path, 'config.json'), 'r') as config_fp,
@@ -68,6 +59,17 @@ if __name__ == '__main__':
         config = Config.model_validate_json(config_fp.read())
         user_prompt = user_prompt_fp.read()
         system_prompt = Template(system_prompt_fp.read()).substitute(dict(config))
+
+    api_key_var = f'{config.api}_key'.upper()
+    api_key_file = f'{config.api}.key'
+    key = os.environ.get(api_key_var)
+    if key is None and os.path.exists(os.path.join(script_path, api_key_file)):
+            with open(os.path.join(script_path, api_key_file), 'r') as key_fp:
+                key = key_fp.read()
+
+    if not key:
+        logger.error(f"Could not retrieve llm key, populate env variable {api_key_var} or file {api_key_file}")
+        sys.exit()
 
     logger.debug_enabled = config.debug
     prompt = user_prompt + '\n' + system_prompt
@@ -90,12 +92,27 @@ if __name__ == '__main__':
         logger.warning("Found no file to translate, already translated files are ignored.")
         sys.exit()
 
-    client = GeminiClient(
-        key=key,
-        model=config.model,
-        prompt=prompt,
-        config=config.content_config
-    )
+    if config.api == 'gemini':
+        from src.llm.gemini import GeminiClient
+        client = GeminiClient(
+            key=key,
+            model=config.model,
+            prompt=prompt,
+            config=config.llm_config
+        )
+        logger.info("Using gemini")
+    elif config.api == 'groq':
+        from src.llm.groq import GroqClient
+        client = GroqClient(
+            key=key,
+            model=config.model,
+            prompt=prompt,
+            config=config.llm_config
+        )
+        logger.info("Using groq")
+    else:
+        logger.error(f"Api {config.api} not supported")
+        sys.exit()
 
     queue = RateLimitedLLM(
         client=client,

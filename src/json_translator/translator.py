@@ -62,7 +62,7 @@ class JsonChunkerTranslator:
             return resp
         except InvalidJsonException:
             if len(chunks.chunks) > self._reduced_request_chunks:
-                logger.warning(f"{chunk_id}: Gemini returned an invalid json, retrying with reduced context window")
+                logger.warning(f"{chunk_id}: LLM returned an invalid json, retrying with reduced context window")
                 return await self._split_and_translate(chunk_id, chunks, self._reduced_request_chunks)
             else:
                 raise

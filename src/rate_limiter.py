@@ -5,7 +5,7 @@ from collections import deque
 from dataclasses import dataclass
 from math import inf
 
-from src.gemini import GeminiClient, Structure
+from src.llm.llm import LLM
 from src.models import *
 import src.logger as logger
 
@@ -17,7 +17,7 @@ class LogEntry:
 class RateLimitedLLM:
 
     def __init__(self,
-            client: GeminiClient,
+            client: LLM,
             requests_per_minute: int,
             tokens_per_minute: int,
             max_retries: int,
@@ -37,30 +37,44 @@ class RateLimitedLLM:
         self._running = 0
         self._completed_log: deque[LogEntry] = deque()
         self._waiting_warning = False
+        self._rate_limit_warning = False
 
-    def _clean_window(self):
+    def _clean_window(self) -> int:
+        freed = 0
         while (
                 self._completed_log
                 and datetime.now(tz=timezone.utc) - self._completed_log[0].utc > self.wait_window):
             self._minute_tokens -= self._completed_log.popleft().tokens
             self._minute_requests -= 1
+            freed += 1
+        return freed
 
     def _try_start(self, tokens_n: int) -> bool:
 
         self._clean_window()
 
-        if (
-            self._minute_requests < self.rpm
-            and self._running < self.max_concurrent_requests
-            and self._minute_tokens + tokens_n <= self.tpm
-        ):
+        if self._minute_requests >= self.rpm:
+            full, limit = True, 'requests per minute'
+        elif self._running >= self.max_concurrent_requests:
+            full, limit = True, 'concurrent requests'
+        elif self._minute_tokens + tokens_n > self.tpm:
+            full, limit = True, 'tokens per minute'
+        else:
+            full, limit = False, None
+
+        if not full:
             self._minute_requests += 1
             self._minute_tokens += tokens_n
             self._running += 1
             self._waiting_warning = False
+            self._rate_limit_warning = False
             return True
 
-        elif self._running == 0 and not self._waiting_warning:
+        if limit and not self._rate_limit_warning:
+            logger.warning(f"{limit} limit reached")
+            self._rate_limit_warning = True
+
+        if self._running == 0 and not self._waiting_warning:
             wait = self.wait_window + self._completed_log[0].utc - datetime.now(tz=timezone.utc)
             logger.warning(f"Waiting {max(wait.seconds, 1)} seconds for rate limits")
             self._waiting_warning = True
@@ -87,7 +101,7 @@ class RateLimitedLLM:
             await asyncio.sleep(2)
 
         try:
-            logger.info(f"{request_id}: calling Gemini")
+            logger.info(f"{request_id}: calling LLM")
             return await self.client.ask(text)
 
         except RetriableException as ex:
@@ -114,7 +128,7 @@ class RateLimitedLLM:
             await asyncio.sleep(2)
 
         try:
-            logger.info(f"{request_id}: calling Gemini")
+            logger.info(f"{request_id}: calling LLM")
             return await self.client.structured_output(text, structure)
 
         except RetriableException as ex:

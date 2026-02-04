@@ -5,11 +5,8 @@ from google import genai
 from google.genai.errors import ClientError, ServerError
 from google.genai.types import GenerateContentResponse
 
-from src.models import RetriableException, InvalidJsonException
+from src.models import RetriableException, InvalidJsonException, Structure
 import src.logger as logger
-
-
-Structure = TypeVar('Structure', bound=BaseModel)
 
 class GeminiClient:
 
@@ -60,17 +57,9 @@ class GeminiClient:
                 raise ex
 
         if response.parsed is None:
-            raise InvalidJsonException("Gemini response could not be parsed")
+            raise InvalidJsonException("LLM response could not be parsed")
 
         return response.parsed
-
-    async def compute_question_tokens(self, question: str) -> int:
-        question = self.prompt + '\n' + question
-        response = await self.client.aio.models.count_tokens(
-            model=self.model,
-            contents=question,
-        )
-        return response.total_tokens
 
     def estimate_question_tokens(self, question: str) -> int:
         question = self.prompt + '\n' + question

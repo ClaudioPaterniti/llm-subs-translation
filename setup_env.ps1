@@ -28,4 +28,10 @@ if (!(Test-Path -Path "gemini.key")){
     New-Item "./gemini.key" -type file | Out-Null
     write-host "`n"
 }
+if (!(Test-Path -Path "groq.key")){
+    write-host "`n`n"
+    Write-Host "Creating empty groq.key file. Populate it with your groq key"
+    New-Item "./groq.key" -type file | Out-Null
+    write-host "`n"
+}
 Read-Host -Prompt "Press Enter to exit"
