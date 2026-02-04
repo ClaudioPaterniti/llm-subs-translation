@@ -36,7 +36,8 @@ class TextTranslator:
 
     async def _split_and_translate(
             self, chunk_id: str, dialogue: list[str],
-            chunk_lines: int, chunks_per_request: int) -> list[str]:
+            chunk_lines: int, chunks_per_request: int,
+            reduce_retry: bool = True) -> list[str]:
         chunks = [
             dialogue[slc]
             for slc in balanced_partition(len(dialogue), max= chunk_lines*chunks_per_request)]
@@ -46,7 +47,7 @@ class TextTranslator:
             async with asyncio.TaskGroup() as tg:
                 tasks = [
                     tg.create_task(
-                        self._translate_block(chunk_id.format(i+1), chunk, chunks_per_request))
+                        self._translate_block(chunk_id.format(i+1), chunk, chunks_per_request, reduce_retry))
                     for i, chunk in enumerate(chunks)]
 
         except* Exception as exs:
@@ -55,7 +56,7 @@ class TextTranslator:
         return list(chain.from_iterable(t.result() for t in tasks))
 
     async def _translate_block(
-            self, chunk_id: str, dialogue: list[str], chunks_per_request: int) -> list[str]:
+            self, chunk_id: str, dialogue: list[str], chunks_per_request: int, reduce_retry: bool) -> list[str]:
         blocks = []
         for i, slc in enumerate(balanced_partition(len(dialogue), chunks_per_request)):
             blocks.append(f'Part {i+1}\n\n')
@@ -66,9 +67,10 @@ class TextTranslator:
         resp = part_regex.sub('', resp)
         lines = [line.strip() for line in split_regex.split(resp)][1:]
         if len(lines) != len(dialogue):
-            if len(dialogue) > self.chunk_lines*self.chunks_per_request/2:
+            if reduce_retry:
                 logger.warning(f"{chunk_id}: response lines number does not match original dialogue, retrying with reduced context")
-                return await self._split_and_translate(chunk_id, dialogue, self.chunk_lines/2, chunks_per_request)
+                chunk_lines = ceil((len(dialogue)/chunks_per_request)/2)
+                return await self._split_and_translate(chunk_id, dialogue, chunk_lines, chunks_per_request, False)
             else:
                 raise MisalignmentException(f"{chunk_id}: response lines number does not match original dialogue")
         return lines
