@@ -5,6 +5,7 @@ from typing import ClassVar
 from src.models import TranslationFile, AssSettings
 
 class AssTranslationFile(TranslationFile):
+    char_regex: ClassVar[re.Pattern] = re.compile(r'\[[^[\]]+\]:')
     command_regex: ClassVar[re.Pattern] = re.compile(r'\{[^{}]+\}')
 
     def __init__(self, text: str, settings: AssSettings):
@@ -36,7 +37,7 @@ class AssTranslationFile(TranslationFile):
             f"{line[0]}:" + ','.join(line[1:len(self._format)]) for line in sections]
 
         compose_line = (
-            lambda line: f"{line[self._name_i + 1] or 'Unknown'}: {line[-1]}"
+            lambda line: f"[{line[self._name_i + 1] or 'Unknown'}]: {line[-1]}"
             if self._name_i is not None
             else lambda line: line[-1]
         )
@@ -95,7 +96,7 @@ class AssTranslationFile(TranslationFile):
     def get_translation(self, translation: list[str]):
         if len(self._fields) != len(translation): raise Exception("Lines count mismatch")
         if self._name_i is not None:
-            translation = [line.split(': ', 1)[-1] for line in translation]
+            translation = [self.char_regex.split(line, maxsplit=1)[-1].strip() for line in translation]
         lines = [
             f"{f},{self.command_regex.sub(self._restore_commands, l)}"
             for f, l in zip(self._fields, translation)]

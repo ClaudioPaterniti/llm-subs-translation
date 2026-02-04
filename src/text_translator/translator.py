@@ -15,6 +15,7 @@ from importlib import resources
 
 prompt = Template(resources.files(__package__).joinpath("prompt.md").read_text())
 split_regex = re.compile(r'\s*Line\s+\d+\s*-\s*')
+part_regex = re.compile(r'^\s*Part\s+\d+\s*$', re.MULTILINE)
 
 class TextTranslator:
 
@@ -59,12 +60,13 @@ class TextTranslator:
         for i, slc in enumerate(balanced_partition(len(dialogue), chunks_per_request)):
             blocks.append(f'Part {i+1}\n\n')
             blocks.append('\n'.join([f"Line {h} - {line}" for h, line in enumerate(dialogue[slc])]))
-        text = '\n'.join(blocks)
+        text = '\n\n'.join(blocks)
         question = prompt.substitute(lines_per_chunk= self.chunk_lines, text= text)
         resp = await self.llm.ask(chunk_id, question)
-        lines = [line for line in split_regex.split(resp)][1:]
+        resp = part_regex.sub('', resp)
+        lines = [line.strip() for line in split_regex.split(resp)][1:]
         if len(lines) != len(dialogue):
-            if len(dialogue) > self.chunk_lines/2:
+            if len(dialogue) > self.chunk_lines*self.chunks_per_request/2:
                 logger.warning(f"{chunk_id}: response lines number does not match original dialogue, retrying with reduced context")
                 return await self._split_and_translate(chunk_id, dialogue, self.chunk_lines/2, chunks_per_request)
             else:

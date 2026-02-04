@@ -47,18 +47,25 @@ class RateLimitedLLM:
             self._minute_tokens -= self._completed_log.popleft().tokens
             self._minute_requests -= 1
             freed += 1
+            logger.debug(f"Cleaning - token: {self._minute_tokens}, requests: {self._minute_requests}")
         return freed
 
     def _try_start(self, tokens_n: int) -> bool:
 
         self._clean_window()
 
+        if tokens_n > self.tpm:
+            raise Exception(f"The size of a single request is larger that the token per minutes limit: token: {tokens_n} > {self.tpm}")
+
         if self._minute_requests >= self.rpm:
             full, limit = True, 'requests per minute'
+            logger.debug(f"minute requests {self._minute_requests} >= {self.rpm}")
         elif self._running >= self.max_concurrent_requests:
             full, limit = True, 'concurrent requests'
+            logger.debug(f"requests {self._running} >= {self.max_concurrent_requests}")
         elif self._minute_tokens + tokens_n > self.tpm:
             full, limit = True, 'tokens per minute'
+            logger.debug(f"requests {self._minute_tokens} + {tokens_n} > {self.tpm}")
         else:
             full, limit = False, None
 

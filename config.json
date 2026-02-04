@@ -5,8 +5,8 @@
     "translate_to": "italian",
     "requests_per_minutes": 30,
     "translator_type": "text",
-    "lines_per_chunk": 200,
-    "chunks_per_request": 10,
+    "lines_per_chunk": 150,
+    "chunks_per_request": 6,
     "token_per_minutes": 30000,
     "llm_config": {
         "temperature": 0.0

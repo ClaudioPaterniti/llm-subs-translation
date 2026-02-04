@@ -35,7 +35,7 @@ async def main(llm: RateLimitedLLM, file_paths: list[str], config: Config):
         translator = JsonChunkerTranslator(llm, config.lines_per_chunk, config.chunks_per_request)
     else:
         from src.text_translator.translator import TextTranslator
-        translator = TextTranslator(llm, config.lines_per_chunk)
+        translator = TextTranslator(llm, config.lines_per_chunk, config.chunks_per_request)
 
     async with asyncio.TaskGroup() as tg:
         for file_path in file_paths:
