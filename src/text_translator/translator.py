@@ -14,41 +14,36 @@ import src.logger as logger
 from importlib import resources
 
 prompt = Template(resources.files(__package__).joinpath("prompt.md").read_text())
-split_regex = re.compile(r'\s*Line\s+\d+\s*-\s*')
-part_regex = re.compile(r'^\s*Part\s+\d+\s*$', re.MULTILINE)
 
 class TextTranslator:
 
     def __init__(
             self,
             llm: RateLimitedLLM,
-            chunk_lines: int,
-            chunks_per_request: int = 1):
+            chunk_lines: int):
         self.llm = llm
         self.chunk_lines = chunk_lines
-        self.chunks_per_request = chunks_per_request
         self._prompt = prompt.substitute(lines_per_chunk= self.chunk_lines)
 
     async def __call__(self, filename: str, dialogue: list[str]) -> TranslationOutput:
         translated = await self._split_and_translate(
-            filename, dialogue, self.chunk_lines, self.chunks_per_request)
+            filename, dialogue, self.chunk_lines)
 
         return TranslationOutput(filename, translated)
 
     async def _split_and_translate(
             self, chunk_id: str, dialogue: list[str],
-            chunk_lines: int, chunks_per_request: int,
-            reduce_retry: bool = True) -> list[str]:
+            chunk_lines: int, reduce_retry: bool = True) -> list[str]:
         chunks = [
             dialogue[slc]
-            for slc in balanced_partition(len(dialogue), max= chunk_lines*chunks_per_request)]
+            for slc in balanced_partition(len(dialogue), max= chunk_lines)]
 
         chunk_id = f"{chunk_id}.{{}}" if len(chunks) > 1 else chunk_id
         try:
             async with asyncio.TaskGroup() as tg:
                 tasks = [
                     tg.create_task(
-                        self._translate_block(chunk_id.format(i+1), chunk, chunks_per_request, reduce_retry))
+                        self._translate_block(chunk_id.format(i+1), chunk, reduce_retry))
                     for i, chunk in enumerate(chunks)]
 
         except* Exception as exs:
@@ -57,20 +52,16 @@ class TextTranslator:
         return list(chain.from_iterable(t.result() for t in tasks))
 
     async def _translate_block(
-            self, chunk_id: str, dialogue: list[str], chunks_per_request: int, reduce_retry: bool) -> list[str]:
-        blocks = []
-        for i, slc in enumerate(balanced_partition(len(dialogue), chunks_per_request)):
-            blocks.append(f'Part {i+1}\n\n')
-            blocks.append('\n'.join([f"Line {h} - {line}" for h, line in enumerate(dialogue[slc])]))
-        text = '\n\n'.join(blocks)
+            self, chunk_id: str, dialogue: list[str], reduce_retry: bool) -> list[str]:
+
+        text = '\n'.join([f"<start>{line}</end>" for line in dialogue])
         resp = await self.llm.ask(chunk_id, self._prompt, text)
-        resp = part_regex.sub('', resp)
-        lines = [line.strip() for line in split_regex.split(resp)][1:]
+        lines = [line.replace('</end>', '').strip() for line in resp.split('<start>')[1:]]
         if len(lines) != len(dialogue):
             if reduce_retry:
                 logger.warning(f"{chunk_id}: response lines number does not match original dialogue, retrying with reduced context")
-                chunk_lines = ceil((len(dialogue)/chunks_per_request)/2)
-                return await self._split_and_translate(chunk_id, dialogue, chunk_lines, chunks_per_request, False)
+                chunk_lines = ceil((len(dialogue))/2)
+                return await self._split_and_translate(chunk_id, dialogue, chunk_lines, False)
             else:
                 raise MisalignmentException(f"{chunk_id}: response lines number does not match original dialogue")
         return lines

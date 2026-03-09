@@ -38,7 +38,7 @@ async def main(llm: RateLimitedLLM, file_paths: list[str], config: Config):
         translator = LineTranslator(llm)
     else:
         from src.text_translator.translator import TextTranslator
-        translator = TextTranslator(llm, config.lines_per_chunk, config.chunks_per_request)
+        translator = TextTranslator(llm, config.lines_per_chunk)
 
     async with asyncio.TaskGroup() as tg:
         for file_path in file_paths:
@@ -50,6 +50,15 @@ async def main(llm: RateLimitedLLM, file_paths: list[str], config: Config):
     logger.info(f'Terminated - final log:')
     logger.print_final_log()
 
+def build_system_prompt(conf: Config) -> str:
+    prompt = [f"You have to translate movie subtitles from {conf.original_language} to {conf.translate_to}."]
+    if conf.ass_settings.use_characters:
+        prompt.append("Each line will have the pattern '[Character]: text' keep the same structre without translating the character name.")
+    if conf.ass_settings.keep_formats:
+        prompt.append("Do not translate blocks like '{{format #i}}' between braces or html tags like <tag>.")
+    prompt.append("Translate the dialogue and answer only with the translation without adding anything else.")
+    return '\n'.join(prompt)
+
 
 if __name__ == '__main__':
     script_path = os.path.abspath(os.path.split(__file__)[0])
@@ -57,11 +66,11 @@ if __name__ == '__main__':
     with (
             open(os.path.join(script_path, 'config.json'), 'r') as config_fp,
             open(os.path.join(script_path, 'user_prompt.md'), 'r') as user_prompt_fp,
-            open(os.path.join(script_path, 'system_prompt.md'), 'r') as system_prompt_fp,
         ):
         config = Config.model_validate_json(config_fp.read())
         user_prompt = user_prompt_fp.read()
-        system_prompt = Template(system_prompt_fp.read()).substitute(dict(config))
+
+    system_prompt = build_system_prompt(config)
 
     if config.key:
         api_key_var = f'{config.key}_key'.upper()
@@ -124,6 +133,15 @@ if __name__ == '__main__':
             config=config.llm_config
         )
         logger.info("Using ollama")
+    elif config.api == 'openai':
+        from src.llm.openai import OpenAIClient
+        client = OpenAIClient(
+            model=config.model,
+            prompt=prompt,
+            base_url= config.base_url,
+            config=config.llm_config
+        )
+        logger.info("Using openai")
     else:
         logger.error(f"Api {config.api} not supported")
         sys.exit()

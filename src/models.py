@@ -18,6 +18,7 @@ class AssSettings(BaseModel):
 
 class Config(BaseModel):
     api: str
+    base_url: Optional[str] = None
     key: str = None
     original_language: str
     translate_to: str

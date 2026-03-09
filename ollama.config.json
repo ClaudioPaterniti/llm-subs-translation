@@ -1,9 +1,9 @@
 {
     "api": "ollama",
-    "model": "phi4-mini:3.8b",
+    "model": "gemma3:4b",
     "original_language": "english",
     "translate_to": "italian",
-    "max_concurrent_requests": 20,
+    "max_concurrent_requests": 10,
     "requests_per_minutes": 1000,
     "translator_type": "line",
     "token_per_minutes": 1000000,
