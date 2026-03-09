@@ -3,7 +3,7 @@ from typing import TypeVar
 
 from google import genai
 from google.genai.errors import ClientError, ServerError
-from google.genai.types import GenerateContentResponse
+from google.genai.types import GenerateContentResponse, GenerateContentConfig
 
 from src.models import RetriableException, InvalidJsonException, Structure
 import src.logger as logger
@@ -18,14 +18,17 @@ class GeminiClient:
 
         self.client = genai.Client(api_key=key)
 
-    async def ask(self, question: str) -> str:
+    async def ask(self, system: str, user: str) -> str:
 
-        config= self.config
+        full_prompt = f"{self.prompt}\n{system}"
+        config = GenerateContentConfig(
+            system_instruction=full_prompt,
+            temperature=0.2
+        )
 
         try:
-            full_question = self.prompt + '\n' + question
             response = await self.client.aio.models.generate_content(
-                model=self.model, contents=full_question,
+                model=self.model, contents=user,
                 config=config
             )
         except (ClientError, ServerError) as ex:
@@ -61,6 +64,7 @@ class GeminiClient:
 
         return response.parsed
 
-    def estimate_question_tokens(self, question: str) -> int:
-        question = self.prompt + '\n' + question
-        return int(len(question)*0.5)
+    def estimate_question_tokens(self, system: str, user: str) -> int:
+        # Simple heuristic estimation
+        total_text = '\n'.join((self.prompt, system, user))
+        return int(len(total_text)/4 + 20)

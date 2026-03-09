@@ -27,6 +27,7 @@ class TextTranslator:
         self.llm = llm
         self.chunk_lines = chunk_lines
         self.chunks_per_request = chunks_per_request
+        self._prompt = prompt.substitute(lines_per_chunk= self.chunk_lines)
 
     async def __call__(self, filename: str, dialogue: list[str]) -> TranslationOutput:
         translated = await self._split_and_translate(
@@ -62,8 +63,7 @@ class TextTranslator:
             blocks.append(f'Part {i+1}\n\n')
             blocks.append('\n'.join([f"Line {h} - {line}" for h, line in enumerate(dialogue[slc])]))
         text = '\n\n'.join(blocks)
-        question = prompt.substitute(lines_per_chunk= self.chunk_lines, text= text)
-        resp = await self.llm.ask(chunk_id, question)
+        resp = await self.llm.ask(chunk_id, self._prompt, text)
         resp = part_regex.sub('', resp)
         lines = [line.strip() for line in split_regex.split(resp)][1:]
         if len(lines) != len(dialogue):

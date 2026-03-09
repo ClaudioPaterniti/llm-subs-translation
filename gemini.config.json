@@ -1,20 +1,20 @@
 {
-    "api": "ollama",
-    "model": "gemma3:4b",
+    "api": "gemini",
+    "key": "gemini",
+    "model": "gemini-2.5-flash",
     "original_language": "english",
     "translate_to": "italian",
-    "max_concurrent_requests": 20,
-    "requests_per_minutes": 1000,
-    "translator_type": "line",
-    "token_per_minutes": 1000000,
+    "requests_per_minutes": 10,
+    "translator_type": "text",
+    "lines_per_chunk": 150,
+    "chunks_per_request": 4,
+    "token_per_minutes": 250000,
     "llm_config": {
         "temperature": 0.0
     },
     "max_retries": 2,
     "outfile_suffix": "_ita",
     "ass_settings":{
-        "keep_formats": false,
-        "use_characters": false,
         "ignore": [
             {"field": "Effect", "values": ["fx"]}
         ]

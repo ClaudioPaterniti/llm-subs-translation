@@ -11,10 +11,14 @@ class AssIgnore(BaseModel):
     _field_i: int
 
 class AssSettings(BaseModel):
+    keep_formats: Optional[bool] = True
+    use_characters: Optional[bool] = True
+    remove_complex_lines: Optional[bool] = True
     ignore: Optional[list[AssIgnore]] = None
 
 class Config(BaseModel):
     api: str
+    key: str = None
     original_language: str
     translate_to: str
     outfile_suffix: str

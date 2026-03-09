@@ -33,6 +33,9 @@ async def main(llm: RateLimitedLLM, file_paths: list[str], config: Config):
     if config.translator_type == 'json':
         from src.json_translator.translator import JsonChunkerTranslator
         translator = JsonChunkerTranslator(llm, config.lines_per_chunk, config.chunks_per_request)
+    elif config.translator_type == 'line':
+        from src.line_translator.translator import LineTranslator
+        translator = LineTranslator(llm)
     else:
         from src.text_translator.translator import TextTranslator
         translator = TextTranslator(llm, config.lines_per_chunk, config.chunks_per_request)
@@ -60,16 +63,19 @@ if __name__ == '__main__':
         user_prompt = user_prompt_fp.read()
         system_prompt = Template(system_prompt_fp.read()).substitute(dict(config))
 
-    api_key_var = f'{config.api}_key'.upper()
-    api_key_file = f'{config.api}.key'
-    key = os.environ.get(api_key_var)
-    if key is None and os.path.exists(os.path.join(script_path, api_key_file)):
-            with open(os.path.join(script_path, api_key_file), 'r') as key_fp:
-                key = key_fp.read()
+    if config.key:
+        api_key_var = f'{config.key}_key'.upper()
+        api_key_file = f'{config.key}.key'
+        key = os.environ.get(api_key_var)
+        if key is None and os.path.exists(os.path.join(script_path, api_key_file)):
+                with open(os.path.join(script_path, api_key_file), 'r') as key_fp:
+                    key = key_fp.read()
 
-    if not key:
-        logger.error(f"Could not retrieve llm key, populate env variable {api_key_var} or file {api_key_file}")
-        sys.exit()
+        if not key:
+            logger.error(f"Could not retrieve llm key, populate env variable {api_key_var} or file {api_key_file}")
+            sys.exit()
+    else:
+        key = None
 
     logger.debug_enabled = config.debug
     prompt = user_prompt + '\n' + system_prompt
@@ -110,6 +116,14 @@ if __name__ == '__main__':
             config=config.llm_config
         )
         logger.info("Using groq")
+    elif config.api == 'ollama':
+        from src.llm.ollama import OllamaClient
+        client = OllamaClient(
+            model=config.model,
+            prompt=prompt,
+            config=config.llm_config
+        )
+        logger.info("Using ollama")
     else:
         logger.error(f"Api {config.api} not supported")
         sys.exit()
@@ -119,7 +133,8 @@ if __name__ == '__main__':
         requests_per_minute=config.requests_per_minutes,
         tokens_per_minute=config.token_per_minutes,
         max_retries=config.max_retries,
-        max_concurrent_requests=config.max_concurrent_requests
+        max_concurrent_requests=config.max_concurrent_requests,
+        verbose= config.translator_type != 'line'
     )
 
     asyncio.run(main(queue, to_translate, config))

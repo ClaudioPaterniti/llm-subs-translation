@@ -14,13 +14,15 @@ class GroqClient:
         # Groq uses separate clients for sync and async
         self.client = AsyncGroq(api_key=key)
 
-    async def ask(self, question: str) -> str:
+    async def ask(self, system: str, user: str) -> str:
+
+        full_prompt = f"{self.prompt}\n{system}"
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.prompt},
-                    {"role": "user", "content": question},
+                    {"role": "system", "content": full_prompt},
+                    {"role": "user", "content": user},
                 ],
                 **self.config
             )
@@ -56,7 +58,8 @@ class GroqClient:
             if hasattr(ex, 'status_code') and ex.status_code in {502, 503, 504}:
                 raise RetriableException(str(ex))
             raise ex
-    def estimate_question_tokens(self, question: str) -> int:
-        # Simple heuristic: ~4 chars per token for English text
-        full_text = self.prompt + '\n' + question
-        return int(len(full_text) / 4)
+
+    def estimate_question_tokens(self, system: str, user: str) -> int:
+        # Simple heuristic estimation
+        total_text = '\n'.join((self.prompt, system, user))
+        return int(len(total_text)/4 + 20)

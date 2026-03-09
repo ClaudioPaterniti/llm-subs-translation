@@ -3,12 +3,14 @@ import re
 from typing import ClassVar
 
 from src.models import TranslationFile, AssSettings
+import src.logger as logger
 
 class AssTranslationFile(TranslationFile):
     char_regex: ClassVar[re.Pattern] = re.compile(r'\[[^[\]]+\]:')
     command_regex: ClassVar[re.Pattern] = re.compile(r'\{[^{}]+\}')
 
     def __init__(self, text: str, settings: AssSettings):
+        self.settings = settings
         splitted = text.strip().split('[Events]', 1)
         if len(splitted) == 1: raise ValueError("Invalid .ass format, [Events] tag not found")
         subs = [s for s in splitted[1].split('\n') if s.strip()]
@@ -37,9 +39,9 @@ class AssTranslationFile(TranslationFile):
             f"{line[0]}:" + ','.join(line[1:len(self._format)]) for line in sections]
 
         compose_line = (
-            lambda line: f"[{line[self._name_i + 1] or 'Unknown'}]: {line[-1]}"
-            if self._name_i is not None
-            else lambda line: line[-1]
+            (lambda line: f"[{line[self._name_i + 1] or 'Unknown'}]: {line[-1]}")
+            if self._name_i is not None and settings.use_characters
+            else (lambda line: line[-1])
         )
 
         self._dialogue: list[str] = [
@@ -55,7 +57,10 @@ class AssTranslationFile(TranslationFile):
             if len(splitted) == 2 and splitted[0].strip().lower() == 'dialogue':
                 event, value = splitted
                 fields = value.split(',', len(self._format)-1)
-                if len(fields) == len(self._format) and fields[-1].strip():
+                special_count = sum(1 for char in value if char in '\\{}&()')/len(value)
+                if self.settings.remove_complex_lines and special_count > 0.11:
+                    ignored = True
+                elif len(fields) == len(self._format) and fields[-1].strip():
                     ignored = False
                     for rule in self._ignore:
                         if fields[rule._field_i].strip() in rule.values:
@@ -71,6 +76,8 @@ class AssTranslationFile(TranslationFile):
         return subs
 
     def _sub_commands(self, m: re.Match) -> str:
+        if not self.settings.keep_formats:
+            return ''
         token = f"{{format {len(self._commands)}}}"
         self._commands[token] = m.group(0)
         return token
@@ -95,10 +102,10 @@ class AssTranslationFile(TranslationFile):
 
     def get_translation(self, translation: list[str]):
         if len(self._fields) != len(translation): raise Exception("Lines count mismatch")
-        if self._name_i is not None:
+        if self._name_i is not None and self.settings.use_characters:
             translation = [self.char_regex.split(line, maxsplit=1)[-1].strip() for line in translation]
         lines = [
-            f"{f},{self.command_regex.sub(self._restore_commands, l)}"
+            f"{f},{self.command_regex.sub(self._restore_commands, l) if self.settings.keep_formats else l}".strip()
             for f, l in zip(self._fields, translation)]
         final = []
         j = h = 0

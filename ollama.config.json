@@ -1,6 +1,6 @@
 {
     "api": "ollama",
-    "model": "gemma3:4b",
+    "model": "phi4-mini:3.8b",
     "original_language": "english",
     "translate_to": "italian",
     "max_concurrent_requests": 20,

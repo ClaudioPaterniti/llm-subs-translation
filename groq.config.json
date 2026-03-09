@@ -1,20 +1,20 @@
 {
-    "api": "ollama",
-    "model": "gemma3:4b",
+    "api": "groq",
+    "key": "groq",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
     "original_language": "english",
     "translate_to": "italian",
-    "max_concurrent_requests": 20,
-    "requests_per_minutes": 1000,
-    "translator_type": "line",
-    "token_per_minutes": 1000000,
+    "requests_per_minutes": 30,
+    "translator_type": "text",
+    "lines_per_chunk": 50,
+    "chunks_per_request": 3,
+    "token_per_minutes": 30000,
     "llm_config": {
         "temperature": 0.0
     },
     "max_retries": 2,
     "outfile_suffix": "_ita",
     "ass_settings":{
-        "keep_formats": false,
-        "use_characters": false,
         "ignore": [
             {"field": "Effect", "values": ["fx"]}
         ]

@@ -22,7 +22,8 @@ class RateLimitedLLM:
             tokens_per_minute: int,
             max_retries: int,
             max_concurrent_requests: int = None,
-            wait_window: timedelta = timedelta(seconds=60)):
+            wait_window: timedelta = timedelta(seconds=60),
+            verbose: bool = True):
 
         self.client = client
         self.rpm = requests_per_minute
@@ -38,6 +39,7 @@ class RateLimitedLLM:
         self._completed_log: deque[LogEntry] = deque()
         self._waiting_warning = False
         self._rate_limit_warning = False
+        self._log = logger.info if verbose else logger.debug
 
     def _clean_window(self) -> int:
         freed = 0
@@ -78,7 +80,7 @@ class RateLimitedLLM:
             return True
 
         if limit and not self._rate_limit_warning:
-            logger.warning(f"{limit} limit reached")
+            self._log(f"{limit} limit reached")
             self._rate_limit_warning = True
 
         if self._running == 0 and not self._waiting_warning:
@@ -96,26 +98,26 @@ class RateLimitedLLM:
         return True
 
     async def ask(
-            self, request_id: str, text: str, _retry: int = 0) -> str:
-        tokens = int(self.client.estimate_question_tokens(text) * 2.1)
+            self, request_id: str, system: str, user: str, _retry: int = 0) -> str:
+        tokens = int(self.client.estimate_question_tokens(system, user) * 2.1)
 
         queued = False
         complete = False
         while not self._try_start(tokens):
             if not queued:
                 queued = True
-                logger.info(f"{request_id}: in queue")
-            await asyncio.sleep(2)
+                self._log(f"{request_id}: in queue")
+            await asyncio.sleep(1)
 
         try:
-            logger.info(f"{request_id}: calling LLM")
-            return await self.client.ask(text)
+            self._log(f"{request_id}: calling LLM")
+            return await self.client.ask(system, user)
 
         except RetriableException as ex:
             if _retry < self.max_retries:
                 logger.warning(f"{request_id}: rescheduling after - {ex}")
                 if not complete: complete = self._complete(tokens)
-                return await self.ask(request_id, text, _retry + 1)
+                return await self.ask(request_id, system, user, _retry + 1)
             else:
                 raise
 
@@ -131,11 +133,11 @@ class RateLimitedLLM:
         while not self._try_start(tokens):
             if not queued:
                 queued = True
-                logger.info(f"{request_id}: in queue")
+                self._log(f"{request_id}: in queue")
             await asyncio.sleep(2)
 
         try:
-            logger.info(f"{request_id}: calling LLM")
+            self._log(f"{request_id}: calling LLM")
             return await self.client.structured_output(text, structure)
 
         except RetriableException as ex:
