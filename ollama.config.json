@@ -1,7 +1,7 @@
 {
     "api": "ollama",
     "model": "gemma3:4b",
-    "original_language": "english",
+    "original_language": "french",
     "translate_to": "italian",
     "max_concurrent_requests": 10,
     "requests_per_minutes": 1000,

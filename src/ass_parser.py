@@ -6,8 +6,11 @@ from src.models import TranslationFile, AssSettings
 import src.logger as logger
 
 class AssTranslationFile(TranslationFile):
+    alpha_ratio_thresh = 0.8
+
     char_regex: ClassVar[re.Pattern] = re.compile(r'\[[^[\]]+\]:')
     command_regex: ClassVar[re.Pattern] = re.compile(r'\{[^{}]+\}')
+    alpha_regex: ClassVar[re.Pattern] =  re.compile(r"[a-zA-Z \"?!,.]")
 
     def __init__(self, text: str, settings: AssSettings):
         self.settings = settings
@@ -26,54 +29,31 @@ class AssTranslationFile(TranslationFile):
         for rule in settings.ignore:
             rule._field_i = self._format.get(rule.field.lower()) # maps field name to field position
         self._ignore = [r for r in settings.ignore if r._field_i is not None]
+        self._body = self._parse_body(subs[1:])
 
         # .ass format commands '{...}' are replaced with dummy tokens '{format 1}' to simplify dialogue for translation
         self._commands: dict[str, str] = {} # maps dummy tokens to original commands for final restore
+        self._dialogue_i = self._process_body(self._body)
 
-        self._ignored: list[str] = [] # ignored lines
-        self._ignored_i: list[int] = [] # ignored line numbers
-
-        sections = self._apply_ignores(subs[1:])
-
-        self._fields: list[str] = [
-            f"{line[0]}:" + ','.join(line[1:len(self._format)]) for line in sections]
-
-        compose_line = (
-            (lambda line: f"[{line[self._name_i + 1] or 'Unknown'}]: {line[-1]}")
-            if self._name_i is not None and settings.use_characters
-            else (lambda line: line[-1])
-        )
-
-        self._dialogue: list[str] = [
-            self.command_regex.sub(self._sub_commands, compose_line(line))
-            for line in sections]
-
-
-    def _apply_ignores(self, lines: list[str]) -> list[list[str]]:
-        subs = []
-        for i, l in enumerate(lines):
-            ignored = True
+    def _parse_body(self, lines: list[str]) -> list[list[str]]:
+        """
+        Returns a list of lists, lines that respects the format are returned as a list of the field
+        values, other lines are left as a single string value.
+        """
+        body = []
+        for l in lines:
             splitted = l.split(':', 1)
-            if len(splitted) == 2 and splitted[0].strip().lower() == 'dialogue':
+            if len(splitted) == 2:
                 event, value = splitted
                 fields = value.split(',', len(self._format)-1)
-                special_count = sum(1 for char in value if char in '\\{}&()')/len(value)
-                if self.settings.remove_complex_lines and special_count > 0.11:
-                    ignored = True
-                elif len(fields) == len(self._format) and fields[-1].strip():
-                    ignored = False
-                    for rule in self._ignore:
-                        if fields[rule._field_i].strip() in rule.values:
-                            ignored = True
-                            break
-
-            if ignored:
-                self._ignored_i.append(i)
-                self._ignored.append(l)
+                if len(fields) == len(self._format):
+                    body.append([event] + fields)
+                else:
+                    body.append([l])
             else:
-                subs.append([event] + fields)
+                body.append([l])
 
-        return subs
+        return body
 
     def _sub_commands(self, m: re.Match) -> str:
         if not self.settings.keep_formats:
@@ -85,35 +65,60 @@ class AssTranslationFile(TranslationFile):
     def _restore_commands(self, m: re.Match) -> str:
         return self._commands.get(m.group(0), '{}')
 
+    def _process_body(self, body: list[list[str]]) -> list[int]:
+        """
+        Update the body replacing the commands and logging them into self._commands.
+        Returns the indeces of the selected dialogue lines.
+        """
+        dialogue_i = []
+
+        for i, line in enumerate(body):
+            if len(line) == len(self._format) + 1 and line[0].strip().lower() == 'dialogue':
+                sub = self.command_regex.sub(self._sub_commands, line[-1].strip())
+                ignored = False
+                for rule in self._ignore:
+                    if line[rule._field_i + 1].strip() in rule.values:
+                        ignored = True
+                        break
+                if ignored: continue
+                clean = self.command_regex.sub('', sub).strip()
+                if (
+                    len(clean) > 1
+                    and len(self.alpha_regex.findall(clean))/len(clean) < self.alpha_ratio_thresh
+                ):
+                    continue
+                line[-1] = sub
+                dialogue_i.append(i)
+
+        return dialogue_i
+
     def get_dialogue(self):
-        return self._dialogue
+        if self._name_i is not None and self.settings.use_characters:
+            return [
+                f"[{self._body[i][self._name_i + 1] or 'Unknown'}]: {self._body[i][-1]}"
+                for i in self._dialogue_i
+            ]
+        else: return [self._body[i][-1] for i in self._dialogue_i]
 
     def map_dialogue_lines(self, lines: list[int]) -> list[int]:
         offset = self._header.count('\n') + 1
-        final = []
-        i = 0
-        for l in lines:
-            t = l + i
-            while  i < len(self._ignored_i) and self._ignored_i[i] <= t:
-                i += 1
-                t += 1
-            final.append(offset + t)
-        return final
+        return [offset + self._dialogue_i[i] for i in lines]
 
     def get_translation(self, translation: list[str]):
-        if len(self._fields) != len(translation): raise Exception("Lines count mismatch")
-        if self._name_i is not None and self.settings.use_characters:
-            translation = [self.char_regex.split(line, maxsplit=1)[-1].strip() for line in translation]
-        lines = [
-            f"{f},{self.command_regex.sub(self._restore_commands, l) if self.settings.keep_formats else l}".strip()
-            for f, l in zip(self._fields, translation)]
-        final = []
-        j = h = 0
-        for i in range(len(self._ignored) + len(lines)) :
-            if j < len(self._ignored) and i == self._ignored_i[j]:
-                final.append(self._ignored[j])
-                j += 1
+        if len(self._dialogue_i) != len(translation): raise Exception("Lines count mismatch")
+        lines = []
+        dialogue_i = 0
+        for i, line in enumerate(self._body):
+            if len(line) == len(self._format) + 1:
+                sub = line[-1]
+                if dialogue_i < len(self._dialogue_i) and i == self._dialogue_i[dialogue_i]:
+                    sub = translation[dialogue_i]
+                    if self._name_i is not None and self.settings.use_characters:
+                        sub = self.char_regex.split(sub, maxsplit=1)[-1].strip()
+                    sub = self.command_regex.sub(self._restore_commands, sub)
+                    dialogue_i += 1
+                lines.append(f"{line[0]}:{','.join(line[1:-1])},{sub}")
             else:
-                final.append(lines[h])
-                h += 1
-        return  '\n'.join([self._header] + final)
+                lines.append(line[0])
+
+        return  '\n'.join([self._header] + lines)

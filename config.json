@@ -1,23 +1,23 @@
 {
-    "api": "openai",
-    "base_url": "http://127.0.0.1:8080/v1",
-    "model": "unsloth/Qwen3.5-9B-GGUF:UD-Q4_K_XL",
+    "api": "gemini",
+    "key": "gemini",
+    "model": "gemini-3.1-flash-lite-preview",
     "original_language": "english",
     "translate_to": "italian",
-    "max_concurrent_requests": 10,
-    "requests_per_minutes": 1000,
-    "translator_type": "line",
-    "token_per_minutes": 1000000,
+    "requests_per_minutes": 15,
+    "translator_type": "text",
+    "lines_per_chunk": 250,
+    "chunks_per_request": 3,
+    "token_per_minutes": 250000,
     "llm_config": {
         "temperature": 0.0
     },
     "max_retries": 2,
     "outfile_suffix": "_ita",
     "ass_settings":{
-        "keep_formats": false,
-        "use_characters": false,
         "ignore": [
-            {"field": "Effect", "values": ["fx"]}
+            {"field": "Effect", "values": ["fx"]},
+            {"field": "Style", "values": ["Captions-207+", "Romanji"]}
         ]
     },
     "debug": false

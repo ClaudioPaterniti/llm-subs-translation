@@ -1,1 +1,1 @@
-Each line is separated by the tags <start>text</end>. Do not drop, translate, move or update the <start> and </end> tags.
+Each line is separated by the tags <line>text</line>. Do not drop, translate, move or update the <line> and </line> tags.

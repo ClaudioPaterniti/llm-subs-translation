@@ -54,9 +54,9 @@ class TextTranslator:
     async def _translate_block(
             self, chunk_id: str, dialogue: list[str], reduce_retry: bool) -> list[str]:
 
-        text = '\n'.join([f"<start>{line}</end>" for line in dialogue])
+        text = '\n'.join([f"<line>{line}</line>" for line in dialogue])
         resp = await self.llm.ask(chunk_id, self._prompt, text)
-        lines = [line.replace('</end>', '').strip() for line in resp.split('<start>')[1:]]
+        lines = [line.replace('</line>', '').strip() for line in resp.split('<line>')[1:]]
         if len(lines) != len(dialogue):
             if reduce_retry:
                 logger.warning(f"{chunk_id}: response lines number does not match original dialogue, retrying with reduced context")
